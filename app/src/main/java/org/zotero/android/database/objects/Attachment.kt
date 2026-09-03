@@ -50,7 +50,8 @@ data class Attachment(
             val filename: String,
             val contentType: String,
             val location: FileLocation,
-            val linkType: FileLinkType
+            val linkType: FileLinkType,
+            val path: String? = null,
         ) : Kind()
 
         @Parcelize

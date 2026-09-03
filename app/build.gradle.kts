@@ -107,7 +107,7 @@ android {
     setDefaultProductFlavors()
     productFlavors {
         dev {
-            resValue("string", "app_name", """"Zotero Debug""")
+            resValue("string", "app_name", """"Zotero Blk""")
             buildConfigField("String", "PSPDFKIT_KEY", readPspdfkitKey())
             applicationIdSuffix = ".debug"
         }

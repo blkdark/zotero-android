@@ -110,6 +110,7 @@ import org.zotero.android.uicomponents.singlepicker.SinglePickerResult
 import org.zotero.android.uicomponents.singlepicker.SinglePickerStateCreator
 import org.zotero.android.uicomponents.snackbar.SnackbarMessage
 import timber.log.Timber
+import org.zotero.android.files.LinkedFileResolver
 import java.io.File
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -131,6 +132,7 @@ internal class AllItemsViewModel @Inject constructor(
     private val updateSuggestionUseCase: UpdateSuggestionUseCase,
     private val createAttachmentsDbRequestFactory: CreateAttachmentsDbRequest.Factory,
     private val defaults: Defaults,
+    private val linkedFileResolver: LinkedFileResolver,
 ) : BaseViewModel2<AllItemsViewState, AllItemsViewEffect>(AllItemsViewState()),
     AllItemsProcessorInterface {
 
@@ -269,19 +271,37 @@ internal class AllItemsViewModel @Inject constructor(
                 is Attachment.Kind.file -> {
                     val filename = attachmentType.filename
                     val contentType = attachmentType.contentType
-                    val file = fileStore.attachmentFile(
-                        libraryId = library.identifier,
-                        key = attachment.key,
-                        filename = filename,
-                    )
+                    val file = withContext(dispatchers.io) {
+                        if (attachmentType.linkType == Attachment.FileLinkType.linkedFile) {
+                            linkedFileResolver.resolve(
+                                attachment = attachmentType,
+                                libraryId = library.identifier,
+                                key = attachment.key,
+                            ) ?: fileStore.attachmentFile(
+                                libraryId = library.identifier,
+                                key = attachment.key,
+                                filename = filename,
+                            )
+                        } else {
+                            fileStore.attachmentFile(
+                                libraryId = library.identifier,
+                                key = attachment.key,
+                                filename = filename,
+                            )
+                        }
+                    }
                     when (contentType) {
                         "application/pdf" -> {
-                            showReader(
-                                file = file,
-                                key = attachment.key,
-                                parentKey = parentKey,
-                                library = library
-                            )
+                            if (defaults.isOpenPdfWithExternalApp()) {
+                                openFile(file, contentType)
+                            } else {
+                                showReader(
+                                    file = file,
+                                    key = attachment.key,
+                                    parentKey = parentKey,
+                                    library = library
+                                )
+                            }
                         }
 
                         "text/html", "application/epub+zip" -> {

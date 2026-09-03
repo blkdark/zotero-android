@@ -30,6 +30,7 @@ import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
 import org.joda.time.DateTime
 import org.zotero.android.api.pojo.sync.KeyBaseKeyPair
+import org.zotero.android.androidx.content.longToast
 import org.zotero.android.architecture.BaseViewModel2
 import org.zotero.android.architecture.Defaults
 import org.zotero.android.architecture.EventBusConstants
@@ -44,6 +45,7 @@ import org.zotero.android.architecture.navigation.NavigationParamsMarshaller
 import org.zotero.android.architecture.require
 import org.zotero.android.attachmentdownloader.AttachmentDownloader
 import org.zotero.android.attachmentdownloader.AttachmentDownloaderEventStream
+import org.zotero.android.files.LinkedFileResolver
 import org.zotero.android.database.DbRequest
 import org.zotero.android.database.DbWrapperMain
 import org.zotero.android.database.objects.Attachment
@@ -155,6 +157,7 @@ class ItemDetailsViewModel @Inject constructor(
     private val createAttachmentsDbRequestFactory: CreateAttachmentsDbRequest.Factory,
     private val createItemFromDetailDbRequestFactory: CreateItemFromDetailDbRequest.Factory,
     private val editTypeItemDetailDbRequestFactory: EditTypeItemDetailDbRequest.Factory,
+    private val linkedFileResolver: LinkedFileResolver,
 
     stateHandle: SavedStateHandle,
 ) : BaseViewModel2<ItemDetailsViewState, ItemDetailsViewEffect>(ItemDetailsViewState()) {
@@ -168,6 +171,7 @@ class ItemDetailsViewModel @Inject constructor(
 
     //required to keep item change listener alive
     private var currentItem: RItem? = null
+    private var pendingOpenMode: AttachmentOpenMode? = null
 
     @Subscribe(threadMode = ThreadMode.MAIN)
     fun onEvent(askUserToDeleteOrRestoreItem: AskUserToDeleteOrRestoreItem) {
@@ -256,7 +260,15 @@ class ItemDetailsViewModel @Inject constructor(
                         showAttachment(key = update.key, parentKey = update.parentKey ,libraryId = update.libraryId)
                     }
                     is AttachmentDownloader.Update.Kind.failed -> {
-                        //TODO implement when unzipping is supported
+                        when (val error = update.kind.exception) {
+                            is AttachmentDownloader.Error.linkedFileBaseDirNotConfigured -> {
+                                context.longToast(context.getString(Strings.error_linked_file_base_dir_not_set))
+                            }
+                            is AttachmentDownloader.Error.linkedFileNotFound -> {
+                                context.longToast(context.getString(Strings.error_linked_file_not_found, error.filename))
+                            }
+                            else -> {}
+                        }
                     }
                     else -> {}
                 }
@@ -282,6 +294,7 @@ class ItemDetailsViewModel @Inject constructor(
         EventBus.getDefault().unregister(this)
         conflictResolutionUseCase.currentlyDisplayedItemLibraryIdentifier = null
         conflictResolutionUseCase.currentlyDisplayedItemKey = null
+        pendingOpenMode = null
 
         coroutineScope.cancel()
         super.onCleared()
@@ -1201,7 +1214,7 @@ class ItemDetailsViewModel @Inject constructor(
         finishSave(null)
     }
 
-    fun openAttachment(attachment: Attachment) {
+    fun openAttachment(attachment: Attachment, openMode: AttachmentOpenMode = AttachmentOpenMode.DEFAULT) {
         val key = attachment.key
         val (progress, _) = this.fileDownloader.data(
             key = key,
@@ -1216,13 +1229,16 @@ class ItemDetailsViewModel @Inject constructor(
             }
 
             this.fileDownloader.cancel(key = key, libraryId = viewState.library!!.identifier)
+            pendingOpenMode = null
             return
         }
         val attachment = viewState.attachments.firstOrNull { it.key == key }
         if (attachment == null) {
+            pendingOpenMode = null
             return
         }
 
+        this.pendingOpenMode = openMode
         updateState {
             copy(attachmentToOpen = key)
         }
@@ -1410,6 +1426,12 @@ class ItemDetailsViewModel @Inject constructor(
     fun onLongPressOptionsItemSelected(longPressOptionItem: LongPressOptionItem) {
         viewModelScope.launch {
             when (longPressOptionItem) {
+                is LongPressOptionItem.OpenInExternalApp -> {
+                    openAttachment(longPressOptionItem.attachment, AttachmentOpenMode.EXTERNAL)
+                }
+                is LongPressOptionItem.OpenInBuiltInReader -> {
+                    openAttachment(longPressOptionItem.attachment, AttachmentOpenMode.INTERNAL)
+                }
                 is LongPressOptionItem.TrashNote -> {
                     delete(longPressOptionItem.note)
                 }
@@ -1468,6 +1490,11 @@ class ItemDetailsViewModel @Inject constructor(
     fun onAttachmentLongClick(attachment: Attachment) {
         val actions = mutableListOf<LongPressOptionItem>()
         val attachmentType = attachment.type
+        if (attachmentType is Attachment.Kind.file && attachmentType.contentType == "application/pdf") {
+            actions.add(LongPressOptionItem.OpenInExternalApp(attachment))
+            actions.add(LongPressOptionItem.OpenInBuiltInReader(attachment))
+        }
+
         if (attachmentType is Attachment.Kind.file && attachmentType.location == Attachment.FileLocation.local) {
             actions.add(LongPressOptionItem.DeleteAttachmentFile(attachment))
         }
@@ -1615,11 +1642,14 @@ class ItemDetailsViewModel @Inject constructor(
     ) {
         val attachmentResult = attachment(key = key, libraryId = libraryId)
         if (attachmentResult == null) {
+            pendingOpenMode = null
             return
         }
         val (attachment, library) = attachmentResult
+        val openMode = pendingOpenMode ?: AttachmentOpenMode.DEFAULT
+        pendingOpenMode = null
         viewModelScope.launch {
-            show(attachment = attachment, parentKey = parentKey, library = library)
+            show(attachment = attachment, parentKey = parentKey, library = library, openMode = openMode)
         }
     }
 
@@ -1633,7 +1663,12 @@ class ItemDetailsViewModel @Inject constructor(
         return attachment to library
     }
 
-    private suspend fun show(attachment: Attachment, parentKey: String?, library: Library) {
+    private suspend fun show(
+        attachment: Attachment,
+        parentKey: String?,
+        library: Library,
+        openMode: AttachmentOpenMode = AttachmentOpenMode.DEFAULT,
+    ) {
         val attachmentType = attachment.type
         when (attachmentType) {
             is Attachment.Kind.url -> {
@@ -1642,14 +1677,37 @@ class ItemDetailsViewModel @Inject constructor(
             is Attachment.Kind.file -> {
                 val filename = attachmentType.filename
                 val contentType = attachmentType.contentType
-                val file = fileStore.attachmentFile(
-                    libraryId = library.identifier,
-                    key = attachment.key,
-                    filename = filename,
-                )
+                val file = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    if (attachmentType.linkType == Attachment.FileLinkType.linkedFile) {
+                        linkedFileResolver.resolve(
+                            attachment = attachmentType,
+                            libraryId = library.identifier,
+                            key = attachment.key,
+                        ) ?: fileStore.attachmentFile(
+                            libraryId = library.identifier,
+                            key = attachment.key,
+                            filename = filename,
+                        )
+                    } else {
+                        fileStore.attachmentFile(
+                            libraryId = library.identifier,
+                            key = attachment.key,
+                            filename = filename,
+                        )
+                    }
+                }
                 when (contentType) {
                     "application/pdf" -> {
-                        showPdf(file = file, parentKey = parentKey, attachment = attachment)
+                        val openExternally = when (openMode) {
+                            AttachmentOpenMode.EXTERNAL -> true
+                            AttachmentOpenMode.INTERNAL -> false
+                            AttachmentOpenMode.DEFAULT -> defaults.isOpenPdfWithExternalApp()
+                        }
+                        if (openExternally) {
+                            openFile(file, contentType)
+                        } else {
+                            showPdf(file = file, parentKey = parentKey, attachment = attachment)
+                        }
                     }
                     "text/html", "application/epub+zip" -> {
                         Timber.i("ItemDetailsViewModel: show HTML / EPUB ${attachment.key}")
@@ -2124,3 +2182,10 @@ sealed class ItemDetailsViewEffect : ViewEffect {
     data class ShowZoteroWebView(val url: String) : ItemDetailsViewEffect()
     object AddAttachment : ItemDetailsViewEffect()
 }
+
+enum class AttachmentOpenMode {
+    DEFAULT,
+    INTERNAL,
+    EXTERNAL
+}
+
