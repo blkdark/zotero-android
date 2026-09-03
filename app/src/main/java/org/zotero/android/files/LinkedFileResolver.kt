@@ -75,6 +75,15 @@ class LinkedFileResolver @Inject constructor(
             return null
         }
 
+        // Fast path: if cache file exists and its content URI is already known, return immediately (0 ms)
+        if (libraryId != null && key != null) {
+            val cacheFile = fileStore.attachmentFile(libraryId, key, attachment.filename)
+            if (cacheFile.exists() && cacheFile.length() > 0L && getContentUri(cacheFile) != null) {
+                Timber.i("LinkedFileResolver: Fast-path return cached file at ${cacheFile.absolutePath}")
+                return cacheFile
+            }
+        }
+
         val rawPath = attachment.path ?: ""
         val candidates = mutableListOf<String>()
 
@@ -197,10 +206,22 @@ class LinkedFileResolver @Inject constructor(
         candidates: List<String>,
         filename: String,
     ): DocumentFile? {
+        val rootFiles = root.listFiles()
+
+        // 1. Direct match by filename or simple candidate names in root folder (instant)
+        val simpleNames = candidates.map { File(it.replace('\\', '/')).name }.filter { it.isNotBlank() }
+        val rootMatch = rootFiles.firstOrNull { doc ->
+            doc.isFile && (doc.name.equals(filename, ignoreCase = true) || simpleNames.any { it.equals(doc.name, ignoreCase = true) })
+        }
+        if (rootMatch != null) {
+            return rootMatch
+        }
+
+        // 2. Relative paths with subfolders
         for (candidate in candidates) {
-            if (candidate.contains('/')) {
+            if (candidate.contains('/') || candidate.contains('\\')) {
+                val parts = candidate.replace('\\', '/').split('/').filter { it.isNotBlank() }
                 var current: DocumentFile? = root
-                val parts = candidate.split('/')
                 for (part in parts) {
                     current = current?.findFile(part)
                     if (current == null) break
@@ -208,18 +229,6 @@ class LinkedFileResolver @Inject constructor(
                 if (current != null && current.isFile) {
                     return current
                 }
-            } else {
-                val direct = root.findFile(candidate)
-                if (direct != null && direct.isFile) {
-                    return direct
-                }
-            }
-        }
-
-        // Search root children
-        for (file in root.listFiles()) {
-            if (file.isFile && file.name.equals(filename, ignoreCase = true)) {
-                return file
             }
         }
 
