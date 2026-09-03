@@ -96,4 +96,18 @@
     <string name="pdf_settings_scroll_mode_horizontal">Horizontal</string>
     <string name="pdf_settings_scroll_mode_wrapped">Wrapped</string>
 
+    <string name="settings_open_pdf_external_title">Open PDFs in external app</string>
+    <string name="settings_open_pdf_external_description">Open PDFs with external apps like Zoo for Zotero instead of the built-in reader</string>
+    <string name="item_detail_open_in_external_app">Open in external app</string>
+    <string name="item_detail_open_in_built_in_reader">Open in built-in reader</string>
+
+    <string name="settings_linked_attachment_base_dir_title">Linked Attachment Base Directory</string>
+    <string name="settings_linked_attachment_base_dir_not_set">Not set (tap to choose folder)</string>
+    <string name="settings_linked_attachment_base_dir_dialog_title">Linked Attachment Base Directory</string>
+    <string name="settings_linked_attachment_base_dir_dialog_message">Specify the folder on your Android device where linked files (Link to File) synced with your library are stored.</string>
+    <string name="settings_linked_attachment_base_dir_choose_folder">Choose folder…</string>
+    <string name="settings_linked_attachment_base_dir_clear">Clear</string>
+    <string name="error_linked_file_base_dir_not_set">Linked attachment base directory is not configured. Please set it in Settings.</string>
+    <string name="error_linked_file_not_found">Linked file not found: %1$s</string>
+
 </resources>

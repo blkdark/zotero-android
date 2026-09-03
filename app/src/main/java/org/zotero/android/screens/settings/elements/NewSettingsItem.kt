@@ -17,9 +17,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+
 @Composable
 internal fun NewSettingsItem(
     title: String,
+    subtitle: String? = null,
     textColor: Color = MaterialTheme.colorScheme.onSurface,
     onItemTapped: () -> Unit,
     onItemLongTapped: (() -> Unit)? = null,
@@ -37,11 +41,25 @@ internal fun NewSettingsItem(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Spacer(modifier = Modifier.width(16.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            color = textColor,
-        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(vertical = 12.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = textColor,
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+        }
         Spacer(modifier = Modifier.width(16.dp))
     }
 }

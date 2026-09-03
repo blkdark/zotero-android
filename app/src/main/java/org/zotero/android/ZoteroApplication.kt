@@ -85,8 +85,17 @@ open class ZoteroApplication: Application(), DefaultLifecycleObserver {
         return true
     }
 
+    override fun onCreate(owner: LifecycleOwner) {
+    }
+
     override fun onStart(owner: LifecycleOwner) {
         controllers.willEnterForeground()
+    }
+
+    override fun onResume(owner: LifecycleOwner) {
+    }
+
+    override fun onPause(owner: LifecycleOwner) {
     }
 
     override fun onStop(owner: LifecycleOwner) {

@@ -3,6 +3,7 @@ package org.zotero.android.attachmentdownloader
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import org.zotero.android.api.ZoteroApi
 import org.zotero.android.api.ZoteroNoRedirectApi
 import org.zotero.android.api.network.CustomResult
@@ -13,6 +14,7 @@ import org.zotero.android.database.objects.Attachment.FileLocation
 import org.zotero.android.database.objects.Attachment.Kind
 import org.zotero.android.database.requests.MarkFileAsDownloadedDbRequest
 import org.zotero.android.files.FileStore
+import org.zotero.android.files.LinkedFileResolver
 import org.zotero.android.helpers.Unzipper
 import org.zotero.android.sync.LibraryIdentifier
 import org.zotero.android.webdav.WebDavController
@@ -34,11 +36,14 @@ class AttachmentDownloader @Inject constructor(
     private val unzipper: Unzipper,
     private val webDavController: WebDavController,
     private val sessionStorage: WebDavSessionStorage,
+    private val linkedFileResolver: LinkedFileResolver,
 ) {
     sealed class Error : Exception() {
         object incompatibleAttachment : Error()
         object zipDidntContainRequestedFile : Error()
         object cantUnzipSnapshot : Error()
+        data class linkedFileBaseDirNotConfigured(val filename: String) : Error()
+        data class linkedFileNotFound(val filename: String) : Error()
     }
 
     data class Download(
@@ -209,8 +214,8 @@ class AttachmentDownloader @Inject constructor(
                 val location = attachmentType.location
                 val linkType = attachmentType.linkType
                 when (linkType) {
-                    FileLinkType.linkedFile, FileLinkType.embeddedImage -> {
-                        Timber.i("AttachmentDownloader: tried opening linkedFile or embeddedImage ${attachment.key}")
+                    FileLinkType.embeddedImage -> {
+                        Timber.i("AttachmentDownloader: tried opening embeddedImage ${attachment.key}")
 
                         attachmentDownloaderEventStream.emitAsync(
                             Update.init(
@@ -222,6 +227,41 @@ class AttachmentDownloader @Inject constructor(
                                 )
                             )
                         )
+                    }
+
+                    FileLinkType.linkedFile -> {
+                        coroutineScope.launch {
+                            val linkedFile = linkedFileResolver.resolve(
+                                attachment = attachmentType,
+                                libraryId = attachment.libraryId,
+                                key = attachment.key,
+                            )
+                            if (linkedFile != null && linkedFile.exists()) {
+                                Timber.i("AttachmentDownloader: linked file found at ${linkedFile.absolutePath}")
+                                attachmentDownloaderEventStream.emitAsync(
+                                    Update.init(
+                                        key = attachment.key,
+                                        parentKey = parentKey,
+                                        libraryId = attachment.libraryId,
+                                        kind = Update.Kind.ready
+                                    )
+                                )
+                            } else {
+                                val error = if (!linkedFileResolver.isBaseDirectoryConfigured()) {
+                                    Error.linkedFileBaseDirNotConfigured(attachmentType.filename)
+                                } else {
+                                    Error.linkedFileNotFound(attachmentType.filename)
+                                }
+                                attachmentDownloaderEventStream.emitAsync(
+                                    Update.init(
+                                        key = attachment.key,
+                                        parentKey = parentKey,
+                                        libraryId = attachment.libraryId,
+                                        kind = Update.Kind.failed(error)
+                                    )
+                                )
+                            }
+                        }
                     }
 
                     FileLinkType.importedFile, FileLinkType.importedUrl -> {

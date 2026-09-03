@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_open_pdf_external_title">Abrir PDFs en aplicación externa</string>
+    <string name="settings_open_pdf_external_description">Abrir PDFs con aplicaciones externas (como Zoo for Zotero) en lugar del lector integrado</string>
+    <string name="item_detail_open_in_external_app">Abrir en aplicación externa</string>
+    <string name="item_detail_open_in_built_in_reader">Abrir en lector integrado</string>
+
+    <string name="settings_linked_attachment_base_dir_title">Directorio base de archivos enlazados</string>
+    <string name="settings_linked_attachment_base_dir_not_set">No configurado (toca para elegir carpeta)</string>
+    <string name="settings_linked_attachment_base_dir_dialog_title">Directorio base de archivos enlazados</string>
+    <string name="settings_linked_attachment_base_dir_dialog_message">Especifica la carpeta en tu dispositivo Android donde se encuentran los archivos enlazados (Link to File) sincronizados con tu biblioteca.</string>
+    <string name="settings_linked_attachment_base_dir_choose_folder">Seleccionar carpeta…</string>
+    <string name="settings_linked_attachment_base_dir_clear">Limpiar</string>
+    <string name="error_linked_file_base_dir_not_set">El directorio base de archivos enlazados no está configurado. Por favor establécelo en Ajustes.</string>
+    <string name="error_linked_file_not_found">No se encontró el archivo enlazado: %1$s</string>
+</resources>

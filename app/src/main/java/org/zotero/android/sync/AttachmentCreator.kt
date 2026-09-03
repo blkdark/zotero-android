@@ -457,7 +457,13 @@ class AttachmentCreator {
             }
 
             val filename = filename(item, ext = File(path).extension)
-            return Attachment.Kind.file(filename = filename, contentType = contentType, location = Attachment.FileLocation.local, linkType = Attachment.FileLinkType.linkedFile)
+            return Attachment.Kind.file(
+                filename = filename,
+                contentType = contentType,
+                location = Attachment.FileLocation.local,
+                linkType = Attachment.FileLinkType.linkedFile,
+                path = path
+            )
         }
         private fun priority(contentType: String): Int {
             return when (contentType) {

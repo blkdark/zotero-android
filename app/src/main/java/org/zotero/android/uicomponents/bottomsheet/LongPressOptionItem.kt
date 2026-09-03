@@ -52,6 +52,17 @@ sealed class LongPressOptionItem(
         resIcon = Drawables.vertical_align_top_24px
     )
 
+    data class OpenInExternalApp(val attachment: Attachment): LongPressOptionItem(
+        titleId = Strings.item_detail_open_in_external_app,
+        resIcon = Drawables.open_in_new_24px
+    )
+
+    data class OpenInBuiltInReader(val attachment: Attachment): LongPressOptionItem(
+        titleId = Strings.item_detail_open_in_built_in_reader,
+        resIcon = Drawables.reader
+    )
+
+
     data class CollectionDelete(val collection: org.zotero.android.sync.Collection) :
         LongPressOptionItem(
             titleId = Strings.delete,

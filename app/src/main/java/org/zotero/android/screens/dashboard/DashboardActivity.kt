@@ -35,9 +35,11 @@ import org.zotero.android.architecture.coroutines.Dispatchers
 import org.zotero.android.architecture.navigation.DashboardTopLevelDialogs
 import org.zotero.android.architecture.navigation.phone.DashboardRootPhoneNavigation
 import org.zotero.android.architecture.navigation.tablet.DashboardRootTopLevelTabletNavigation
+import android.content.ClipData
 import org.zotero.android.architecture.navigation.toolbar.SyncToolbarScreen
 import org.zotero.android.architecture.ui.CustomLayoutSize
 import org.zotero.android.files.FileStore
+import org.zotero.android.files.LinkedFileResolver
 import org.zotero.android.ktx.enableEdgeToEdgeAndTranslucency
 import org.zotero.android.uicomponents.themem3.AppThemeM3
 import timber.log.Timber
@@ -61,6 +63,9 @@ internal class DashboardActivity : BaseActivity() {
 
     @Inject
     lateinit var dispatchers: Dispatchers
+
+    @Inject
+    lateinit var linkedFileResolver: LinkedFileResolver
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,13 +97,15 @@ internal class DashboardActivity : BaseActivity() {
             pickFileLauncher.launch(pickFileIntent())
         }
         val onOpenFile: (file: File, mimeType: String) -> Unit = { file, mimeType ->
-            val fileProviderAuthority = BuildConfig.APPLICATION_ID + ".provider"
-            val resultUri = FileProvider.getUriForFile(this, fileProviderAuthority, file)
-            val intent = Intent(Intent.ACTION_VIEW)
-            intent.setDataAndType(resultUri, mimeType)
-            intent.putExtra(MediaStore.EXTRA_OUTPUT, resultUri)
-            intent.flags = FLAG_GRANT_READ_URI_PERMISSION
-            showAppChooserExcludingZoteroApp(intent)
+            val contentUri = linkedFileResolver.getContentUri(file)
+            val resultUri = contentUri ?: FileProvider.getUriForFile(this, BuildConfig.APPLICATION_ID + ".provider", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(resultUri, mimeType)
+                putExtra(MediaStore.EXTRA_OUTPUT, resultUri)
+                clipData = ClipData.newRawUri("", resultUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            }
+            showAppChooserExcludingZoteroApp(intent, null)
         }
 
         val onOpenWebpage: (url: String) -> Unit = { url ->
@@ -127,7 +134,7 @@ internal class DashboardActivity : BaseActivity() {
             share.setAction(Intent.ACTION_SEND)
             share.setDataAndType(resultUri, "application/pdf")
             share.putExtra(Intent.EXTRA_STREAM, resultUri)
-            showAppChooserExcludingZoteroApp(share)
+            showAppChooserExcludingZoteroApp(share, "Share file")
         }
 
         val onExportHtml: (file: File) -> Unit = { file ->
@@ -137,7 +144,7 @@ internal class DashboardActivity : BaseActivity() {
             share.setAction(Intent.ACTION_SEND)
             share.setDataAndType(resultUri, "text/html")
             share.putExtra(Intent.EXTRA_STREAM, resultUri)
-            showAppChooserExcludingZoteroApp(share)
+            showAppChooserExcludingZoteroApp(share, "Share file")
         }
 
         val mainCoroutineScope = CoroutineScope(dispatchers.main)
@@ -191,21 +198,28 @@ internal class DashboardActivity : BaseActivity() {
 
     }
 
-    private fun showAppChooserExcludingZoteroApp(intent: Intent) {
+    private fun showAppChooserExcludingZoteroApp(intent: Intent, chooserTitle: CharSequence? = null) {
         val noAppFoundMessage = "No app found to open this file"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            val chooserIntent = Intent.createChooser(intent, "Share file")
+            val chooserIntent = Intent.createChooser(intent, chooserTitle)
             val allIntentActivities = packageManager.queryIntentActivities(intent, 0)
             val excludedApps = allIntentActivities
-                .filter { it.activityInfo.name.contains("org.zotero.android") }
+                .filter { it.activityInfo.packageName == packageName }
                 .map {
                     ComponentName(it.activityInfo.packageName, it.activityInfo.name)
                 }
-            chooserIntent.putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, excludedApps.toTypedArray())
-            if (allIntentActivities.size == excludedApps.size) {
+            if (excludedApps.isNotEmpty()) {
+                chooserIntent.putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, excludedApps.toTypedArray())
+            }
+            if (allIntentActivities.isNotEmpty() && allIntentActivities.size == excludedApps.size) {
                 longToast(noAppFoundMessage)
             } else {
-                startActivity(chooserIntent)
+                try {
+                    startActivity(chooserIntent)
+                } catch (e: Exception) {
+                    Timber.e(e, "Error starting chooser activity")
+                    longToast(noAppFoundMessage)
+                }
             }
         } else {
             if (intent.resolveActivity(packageManager) != null) {

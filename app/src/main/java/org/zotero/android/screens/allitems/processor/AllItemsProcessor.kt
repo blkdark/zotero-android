@@ -17,10 +17,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.withContext
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
+import org.zotero.android.androidx.content.longToast
 import org.zotero.android.architecture.Defaults
 import org.zotero.android.architecture.EventBusConstants
 import org.zotero.android.architecture.LCE2
@@ -47,6 +50,7 @@ import org.zotero.android.sync.Collection
 import org.zotero.android.sync.CollectionIdentifier
 import org.zotero.android.sync.Library
 import org.zotero.android.sync.UrlDetector
+import org.zotero.android.uicomponents.Strings
 import org.zotero.android.uicomponents.attachmentprogress.State
 import org.zotero.android.uicomponents.singlepicker.SinglePickerResult
 import timber.log.Timber
@@ -55,6 +59,7 @@ import kotlin.coroutines.coroutineContext
 
 @ViewModelScoped
 class AllItemsProcessor @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val dispatchers: Dispatchers,
     private val defaults: Defaults,
     private val fileStore: FileStore,
@@ -201,7 +206,15 @@ class AllItemsProcessor @Inject constructor(
                                 showAttachment(key = update.key, parentKey = update.parentKey)
                             }
                             is AttachmentDownloader.Update.Kind.failed -> {
-                                //TODO implement when unzipping is supported
+                                when (val error = update.kind.exception) {
+                                    is AttachmentDownloader.Error.linkedFileBaseDirNotConfigured -> {
+                                        context.longToast(context.getString(Strings.error_linked_file_base_dir_not_set))
+                                    }
+                                    is AttachmentDownloader.Error.linkedFileNotFound -> {
+                                        context.longToast(context.getString(Strings.error_linked_file_not_found, error.filename))
+                                    }
+                                    else -> {}
+                                }
                             }
                             else -> {}
                         }

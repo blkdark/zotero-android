@@ -79,6 +79,9 @@ open class Defaults @Inject constructor(
     private val webDavPassword = "webDavPassword"
 
     private val doNotShowAppUpdateBannerBeforeTime = "doNotShowAppUpdateBannerBeforeTime"
+    private val openPdfWithExternalApp = "openPdfWithExternalApp"
+    private val linkedAttachmentBaseDirectory = "linkedAttachmentBaseDirectory"
+    private val linkedAttachmentBaseDirectoryUri = "linkedAttachmentBaseDirectoryUri"
 
     private val sharedPreferences: SharedPreferences by lazy {
         context.getSharedPreferences(
@@ -257,6 +260,32 @@ open class Defaults @Inject constructor(
         val json = dataMarshaller.marshal(pdfSettings)
         sharedPreferences.edit { putString(this@Defaults.pdfSettings, json) }
     }
+
+    fun isOpenPdfWithExternalApp(): Boolean {
+        return sharedPreferences.getBoolean(openPdfWithExternalApp, false)
+    }
+
+    fun setOpenPdfWithExternalApp(newValue: Boolean) {
+        sharedPreferences.edit { putBoolean(openPdfWithExternalApp, newValue) }
+    }
+
+    fun getLinkedAttachmentBaseDirectory(): String? {
+        return sharedPreferences.getString(linkedAttachmentBaseDirectory, null)
+    }
+
+    fun setLinkedAttachmentBaseDirectory(path: String?) {
+        sharedPreferences.edit { putString(linkedAttachmentBaseDirectory, path) }
+    }
+
+    fun getLinkedAttachmentBaseDirectoryUri(): String? {
+        return sharedPreferences.getString(linkedAttachmentBaseDirectoryUri, null)
+    }
+
+    fun setLinkedAttachmentBaseDirectoryUri(uri: String?) {
+        sharedPreferences.edit { putString(linkedAttachmentBaseDirectoryUri, uri) }
+    }
+
+
 
     fun showCollectionItemCounts(): Boolean {
         return sharedPreferences.getBoolean(showCollectionItemCounts, true)
