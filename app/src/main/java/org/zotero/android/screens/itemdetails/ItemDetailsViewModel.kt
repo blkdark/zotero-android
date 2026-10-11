@@ -1698,10 +1698,11 @@ class ItemDetailsViewModel @Inject constructor(
                 }
                 when (contentType) {
                     "application/pdf" -> {
+                        val isLinkedFile = attachmentType.linkType == Attachment.FileLinkType.linkedFile
                         val openExternally = when (openMode) {
                             AttachmentOpenMode.EXTERNAL -> true
                             AttachmentOpenMode.INTERNAL -> false
-                            AttachmentOpenMode.DEFAULT -> defaults.isOpenPdfWithExternalApp()
+                            AttachmentOpenMode.DEFAULT -> defaults.isOpenPdfWithExternalApp() || isLinkedFile
                         }
                         if (openExternally) {
                             openFile(file, contentType)

@@ -292,7 +292,8 @@ internal class AllItemsViewModel @Inject constructor(
                     }
                     when (contentType) {
                         "application/pdf" -> {
-                            if (defaults.isOpenPdfWithExternalApp()) {
+                            val isLinkedFile = attachmentType.linkType == Attachment.FileLinkType.linkedFile
+                            if (defaults.isOpenPdfWithExternalApp() || isLinkedFile) {
                                 openFile(file, contentType)
                             } else {
                                 showReader(

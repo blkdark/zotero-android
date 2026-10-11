@@ -263,7 +263,7 @@ open class Defaults @Inject constructor(
     }
 
     fun isOpenPdfWithExternalApp(): Boolean {
-        return sharedPreferences.getBoolean(openPdfWithExternalApp, false)
+        return sharedPreferences.getBoolean(openPdfWithExternalApp, true)
     }
 
     fun setOpenPdfWithExternalApp(newValue: Boolean) {
